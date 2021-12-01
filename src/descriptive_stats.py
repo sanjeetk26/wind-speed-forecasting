@@ -8,10 +8,14 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+from factor_analyzer import calculate_bartlett_sphericity, calculate_kmo
+from factor_analyzer import FactorAnalyzer
 
-non_factors = ["Year", "Month", "Day", "Hour", "Minute", "Unnamed: 18", "Snow Depth"]
 regions = ["Rajasthan1", "Rajasthan2", "Rajasthan3", "Rajasthan4", "Rajasthan5"]
 years = range(2000, 2015)
+non_factors = ["Year", "Month", "Day", "Hour", "Minute", "Unnamed: 18", "Snow Depth"]
 
 
 def get_df(region: str):
@@ -55,6 +59,97 @@ def plot_boxplot(region: str):
     plt.savefig(f"../plots/boxplot/{region}.png")
 
 
+def plot_corr_map(region: str):
+    os.makedirs(f"../plots/factor-analysis/corr", exist_ok=True)
+
+    df = get_df(region)
+    df.drop(columns=non_factors, inplace=True)
+    corr_map = df.corr()
+
+    # mask to hide upper triangle
+    mask = np.zeros_like(corr_map)
+    tri_indices = np.triu_indices_from(mask, k=1)
+    mask[tri_indices] = True
+
+    sns.set_context("talk")
+    plt.figure(figsize=(15, 12))
+    sns.heatmap(
+        corr_map,
+        annot=True,
+        mask=mask,
+        cmap=sns.diverging_palette(300, 145, s=60, as_cmap=True),
+        annot_kws={"size": 14},
+    )
+    sns.set_style("white")
+    plt.savefig(f"../plots/factor-analysis/corr/{region}.png", bbox_inches="tight")
+
+
+def calc_bts(region: str):
+    df = get_df(region)
+    df.drop(columns=non_factors, inplace=True)
+    print(calculate_bartlett_sphericity(df))
+
+
+def calc_kmo(region: str):
+    df = get_df(region)
+    df.drop(columns=non_factors, inplace=True)
+    print(calculate_kmo(df)[1])
+
+
+def scree_plot(region: str):
+    os.makedirs(f"../plots/factor-analysis/scree", exist_ok=True)
+
+    df = get_df(region)
+    df.drop(columns=non_factors, inplace=True)
+
+    # get the eigenvalues
+    fa = FactorAnalyzer(n_factors=12, rotation=None)
+    fa.fit(df)
+    evalues, evectors = fa.get_eigenvalues()
+
+    # plot
+    sns.set_context("talk")
+    plt.figure(figsize=(15, 12))
+    xvals = range(1, 13)
+    sns.scatterplot(x=xvals, y=evalues)
+    sns.lineplot(x=range(1, 13), y=evalues)
+    plt.xlabel("Factors")
+    plt.ylabel("Eigenvalues")
+    plt.title("Scree Plot")
+    plt.xticks(xvals)
+    plt.savefig(f"../plots/factor-analysis/scree/{region}.png")
+
+
+def fa_loadings(region: str):
+    df = get_df(region)
+    df.drop(columns=non_factors, inplace=True)
+
+    # perform factor analysis
+    fa = FactorAnalyzer(n_factors=3, rotation="varimax")
+    fa.fit(df)
+
+    loadings_df = pd.DataFrame.from_records(
+        fa.loadings_, columns=["Factor 1", "Factor 2", "Factor 3"], index=df.columns
+    )
+    print(loadings_df)
+
+
+def fa_variance(region: str):
+    df = get_df(region)
+    df.drop(columns=non_factors, inplace=True)
+
+    # perform factor analysis
+    fa = FactorAnalyzer(n_factors=3, rotation="varimax")
+    fa.fit(df)
+
+    loadings_df = pd.DataFrame.from_records(
+        fa.get_factor_variance(),
+        columns=["Factor 1", "Factor 2", "Factor 3"],
+        index=["SS Loadings", "Proportion Variance", "Cumulative Variance"],
+    )
+    print(loadings_df)
+
+
 # Plot all histograms
 # for region in regions:
 #     for yr in years:
@@ -63,3 +158,11 @@ def plot_boxplot(region: str):
 # Plot all boxpplots
 # for region in regions:
 #     plot_boxplot(region)
+
+# for region in regions:
+#     plot_corr_map(region)
+
+# for r in regions:
+#     scree_plot(r)
+
+# fa_variance(regions[0])
